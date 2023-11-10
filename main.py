@@ -1,0 +1,213 @@
+
+# This code is a Streamlit application that uses OpenAI's GPT-3.5-turbo model to simulate a conversation about colon cancer screening. 
+# The user can ask a question and the assistant responds based on the context provided. The conversation history is stored in the session state 
+# and is displayed in an expander. If the conversation exceeds 4000 tokens, the middle part of the conversation is summarized using the 
+# GPT-3.5-turbo model. The application also includes a password check to restrict access.
+
+
+# Import required libraries
+import openai
+import streamlit as st
+from openai import OpenAI
+import os
+import time
+
+# Define a function to check if the password entered by the user is correct
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        # If the password entered by the user matches the correct password
+        if st.session_state["password"] == st.secrets["password"]:
+            # Set the password_correct flag to True
+            st.session_state["password_correct"] = True
+            # Remove the password from the session state as it's no longer needed
+            # del st.session_state["password"]
+        else:
+            # If the password is incorrect, set the password_correct flag to False
+            st.session_state["password_correct"] = False
+
+    # If this is the first run of the app, or if the password was incorrect
+    if "password_correct" not in st.session_state or not st.session_state["password_correct"]:
+        # Show a password input field
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        # Display a message to contact David for the password
+        st.write("*Please contact David Liebovitz, MD if you need an updated password for access.*")
+        # Return False as the password is not correct or not yet entered
+        return False
+    else:
+        # If the password is correct, return True
+        return True
+
+# Define a function to summarize a text using the GPT-3.5-turbo model
+def summarize(text):
+    # Send a message to the model asking it to summarize the text
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Please summarize the following text: {text}"}
+        ]
+    )
+    # Return the content of the model's response
+    return response['choices'][0]['message']['content']
+
+# If the conversation history is not yet in the session state, initialize it
+if 'conversation_history' not in st.session_state:
+    st.session_state['conversation_history'] = []
+
+# Define the disclaimer text
+disclaimer = """**Disclaimer:** This is a tool to provide information about colon cancer screening for educational use only. Your use of this tool accepts the following:   
+1. This tool does not generate validated medical content. \n 
+2. This tool is not a real doctor. \n    
+3. You will not take any medical action based solely on the output of this tool. \n   
+"""
+
+# Set the page configuration
+st.set_page_config(page_title='Learn about Colon Cancer Screening', layout = 'centered', page_icon = ':stethoscope:', initial_sidebar_state = 'auto')
+
+# Display the title of the page
+st.title("Learn about Colon Cancer Screening")
+
+# Display the version of the app
+st.write("ALPHA version 0.5")
+
+# Create an expander for the disclaimer
+with st.expander('Important Disclaimer'):
+    # Display the author of the app
+    st.write("Author: David Liebovitz, MD, Northwestern University")
+
+    # Display the disclaimer
+    st.info(disclaimer)
+
+# If the password is correct
+if check_password():
+    # Initialize the OpenAI client
+    client = OpenAI()
+
+    # Set the OpenAI API key
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+    # Display an input field to enter the user's name
+    name = st.text_input("What is your name?")
+
+    # Display a radio button to select the user's role
+    role =st.radio("Are you a patient or a clinician?", ["Patient", "Clinician"])
+
+    # Set the mission of the assistant based on the user's role
+    if role == "Patient":
+        mission = "Your mission is to encourage the user to have colorectal cancer screening. If it's not yet time, encourage the user to spread the word to their family and friends. "
+    if role == "Clinician":
+        mission = """Your mission is to help the clinician implement strategies to ensure no patients in their practice miss screening for colon cancer. 
+        **This is life or death!** Encourage strategies like mailed FIT kits, reports on screening rates, team huddles for the day, automated reminders, protocolized orders, and more.
+        """
+
+    # Display an input field to enter a question
+    question = st.text_input("Ask a question", "Is screening for colon cancer important?")
+
+    # Initialize the total token count
+    total_tokens = 0
+
+    # When the Send button is clicked
+    if st.button("Send"):
+        try:
+            # Add the user's message to the conversation history
+            st.session_state.conversation_history.append(f'*{name}:* {question}')
+            # Update the total token count
+            total_tokens += len(question.split())
+
+            # Create a new thread
+            thread = client.beta.threads.create()
+
+            # If the conversation exceeds 4000 tokens
+            if total_tokens > 4000:
+                # Summarize the middle part of the conversation
+                summarized_text = summarize(' '.join(st.session_state.conversation_history[2:-2]))
+                # Replace the middle part of the conversation with the summary
+                st.session_state.conversation_history = st.session_state.conversation_history[:2] + [summarized_text] + st.session_state.conversation_history[-2:]
+
+            # Send the user's message
+            message = client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=st.session_state.conversation_history[-1]  # Use the most recent message
+            )
+
+            # Create a run with the assistant
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id =st.secrets["assistant_id"],
+                instructions=f"Act as a polite friend to the user, {name}. Your critical mission: {mission}. Rely on the context provided for facts about colorectal cancer screening. Include source annotations.",
+                tools=[{"type": "retrieval"}]
+            )
+
+            # Retrieve the run
+            run = client.beta.threads.runs.retrieve(
+                thread_id=thread.id,
+                run_id=run.id
+            )
+
+            # Initialize a counter for the number of attempts to retrieve the run
+            counter = 0
+
+            # While the run is not completed and the counter is less than 10
+            while run.status != "completed" and counter < 10:
+                # Wait for 5 seconds
+                time.sleep(5)
+                # Retrieve the run again
+                run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+                # Increment the counter
+                counter += 1
+                
+            # If the counter reached 10
+            if counter == 10:
+                # Display a message that the run timed out
+                st.write("Run timed out")
+
+            # List the messages in the thread
+            messages = client.beta.threads.messages.list(
+                thread_id=thread.id,
+            )
+            st.write(f'here are the full messages {messages}')
+            # For each message in the thread
+            for message in messages.data:
+                # If the message is from the assistant and it has content
+                if message.role == 'assistant' and message.content:
+                    # Add the assistant's response to the conversation history
+                    st.session_state.conversation_history.append(f'*AI:* {message.content[0].text.value}')
+                    # Update the total token count
+                    total_tokens += len(message.content[0].text.value.split())
+
+                    # Display the assistant's response
+                    st.write(message.content[0].text.value)
+                    # Find the annotation for the assistant's response
+                    message_content = message.content[0].text
+                    annotations = message_content.annotations
+                    st.write(f'here are the annotations: {annotations}')
+                    citations = []
+                    # Iterate over the annotations and add footnotes
+                    for index, annotation in enumerate(annotations):
+                        # Replace the text with a footnote
+                        message_content.value = message_content.value.replace(annotation.text, f' [{index}]')
+
+                        # Gather citations based on annotation attributes
+                        if (file_citation := getattr(annotation, 'file_citation', None)):
+                            cited_file = client.files.retrieve(file_citation.file_id)
+                            citations.append(f'[{index}] {file_citation.quote} from {cited_file.filename}')
+                        elif (file_path := getattr(annotation, 'file_path', None)):
+                            cited_file = client.files.retrieve(file_path.file_id)
+                            citations.append(f'[{index}] Click <here> to download {cited_file.filename}')
+                    st.write(citations)
+
+        # If an exception occurred
+        except Exception as e:
+            # Display the exception
+            st.write("An error occurred: ", str(e))
+            
+    # Create an expander for the conversation history
+    with st.expander("Show conversation history"):
+        # Display the conversation history
+        st.markdown('\n\n'.join(st.session_state.conversation_history))
