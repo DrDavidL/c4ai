@@ -74,6 +74,7 @@ st.title("Learn about C4AI Topics!")
 
 # Display the version of the app
 st.write("ALPHA version 0.5")
+st.warning("Annotations are not yet working... and this heavily uses beta (sometimes breaking) features from OpenAI, so please be patient! Please contact David if you have any questions or feedback.")
 
 # Create an expander for the disclaimer
 with st.expander('Important Disclaimer'):
