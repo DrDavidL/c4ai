@@ -49,7 +49,7 @@ def summarize(text):
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Please summarize the following text: {text}"}
+            {"role": "user", "content": f"Please summarize the following text capturing topics covered: {text}"}
         ]
     )
     # Return the content of the model's response
@@ -60,17 +60,17 @@ if 'conversation_history' not in st.session_state:
     st.session_state['conversation_history'] = []
 
 # Define the disclaimer text
-disclaimer = """**Disclaimer:** This is a tool to provide information about colon cancer screening for educational use only. Your use of this tool accepts the following:   
+disclaimer = """**Disclaimer:** This is a tool to provide information about topics discussed at the C4AI meeting. Your use of this tool accepts the following:   
 1. This tool does not generate validated medical content. \n 
-2. This tool is not a real doctor. \n    
+2. This tool is not a real doctor (or statistician). \n    
 3. You will not take any medical action based solely on the output of this tool. \n   
 """
 
 # Set the page configuration
-st.set_page_config(page_title='Learn about Colon Cancer Screening', layout = 'centered', page_icon = ':stethoscope:', initial_sidebar_state = 'auto')
+st.set_page_config(page_title='Learn about C4AI Topics!', layout = 'centered', page_icon = ':stethoscope:', initial_sidebar_state = 'auto')
 
 # Display the title of the page
-st.title("Learn about Colon Cancer Screening")
+st.title("Learn about C4AI Topics!")
 
 # Display the version of the app
 st.write("ALPHA version 0.5")
@@ -95,18 +95,16 @@ if check_password():
     name = st.text_input("What is your name?")
 
     # Display a radio button to select the user's role
-    role =st.radio("Are you a patient or a clinician?", ["Patient", "Clinician"])
+    role =st.radio("Start with the basics or jump quickly to advanced?", ["Basics", "Advanced"])
 
     # Set the mission of the assistant based on the user's role
-    if role == "Patient":
-        mission = "Your mission is to encourage the user to have colorectal cancer screening. If it's not yet time, encourage the user to spread the word to their family and friends. "
-    if role == "Clinician":
-        mission = """Your mission is to help the clinician implement strategies to ensure no patients in their practice miss screening for colon cancer. 
-        **This is life or death!** Encourage strategies like mailed FIT kits, reports on screening rates, team huddles for the day, automated reminders, protocolized orders, and more.
-        """
+    if role == "Basics":
+        mission = "Your mission is to teach the user through analogies about machine learning, AI, and statistical analysis topics, emphasizing those covered in the provided context. Be friendly, fun, and helpful and try Feynman techniques and analogies. This is a very important mission for this user who is new to the topic. "
+    if role == "Advanced":
+        mission = "Your mission is to teach this advanced user about machine learning, AI, and statistical analysis topics, emphasizing those covered in the provided context. Be focused, brief, to the point. No disclaimers. This is a very important mission for this user who is trying to be maximally efficient. "
 
     # Display an input field to enter a question
-    question = st.text_input("Ask a question", "Is screening for colon cancer important?")
+    question = st.text_input("Ask a question", "Teach me about RAG.")
 
     # Initialize the total token count
     total_tokens = 0
@@ -140,7 +138,7 @@ if check_password():
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id =st.secrets["assistant_id"],
-                instructions=f"Act as a polite friend to the user, {name}. Your critical mission: {mission}. Rely on the context provided for facts about colorectal cancer screening. Include source annotations.",
+                instructions=f"Act as a polite friend to the user, {name}. Your critical mission: {mission}. Rely primarily on the files provided. If the topic isn't addressed in the files, indicate when you are using sources other than the context provided. Include source annotations. If the question (broadly) is fully unrelated to ML, AI, statistics, or material in the context, indicate that you are not able to answer off-topic questions.",
                 tools=[{"type": "retrieval"}]
             )
 
@@ -171,7 +169,7 @@ if check_password():
             messages = client.beta.threads.messages.list(
                 thread_id=thread.id,
             )
-            st.write(f'here are the full messages {messages}')
+            # st.write(f'here are the full messages {messages}')
             # For each message in the thread
             for message in messages.data:
                 # If the message is from the assistant and it has content
