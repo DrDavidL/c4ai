@@ -59,6 +59,12 @@ def summarize(text):
 if 'conversation_history' not in st.session_state:
     st.session_state['conversation_history'] = []
 
+if 'current_response' not in st.session_state:
+    st.session_state['current_response'] = ''
+    
+if 'current_audio_file' not in st.session_state:
+    st.session_state['current_audio_file'] = ''
+
 # Define the disclaimer text
 disclaimer = """**Disclaimer:** This is a tool to provide information about topics discussed at the C4AI meeting. Your use of this tool accepts the following:   
 1. This tool does not generate validated medical content. \n 
@@ -114,7 +120,7 @@ if check_password():
     if st.button("Send"):
         try:
             # Add the user's message to the conversation history
-            st.session_state.conversation_history.append(f'*{name}:* {question}')
+            st.session_state.conversation_history.append(f'**{name}:** {question}')
             # Update the total token count
             total_tokens += len(question.split())
 
@@ -124,7 +130,8 @@ if check_password():
             # If the conversation exceeds 4000 tokens
             if total_tokens > 4000:
                 # Summarize the middle part of the conversation
-                summarized_text = summarize(' '.join(st.session_state.conversation_history[2:-2]))
+                with st.spinner("Summarizing the lengthy conversation..."):
+                    summarized_text = summarize(' '.join(st.session_state.conversation_history[2:-2]))
                 # Replace the middle part of the conversation with the summary
                 st.session_state.conversation_history = st.session_state.conversation_history[:2] + [summarized_text] + st.session_state.conversation_history[-2:]
 
@@ -176,11 +183,12 @@ if check_password():
                 # If the message is from the assistant and it has content
                 if message.role == 'assistant' and message.content:
                     # Add the assistant's response to the conversation history
-                    st.session_state.conversation_history.append(f'*AI:* {message.content[0].text.value}')
+                    st.session_state.conversation_history.append(f'**AI:** {message.content[0].text.value}')
                     # Update the total token count
                     total_tokens += len(message.content[0].text.value.split())
 
                     # Display the assistant's response
+                    st.session_state.current_response = message.content[0].text.value
                     st.write(message.content[0].text.value)
                     # Find the annotation for the assistant's response
                     message_content = message.content[0].text
@@ -210,3 +218,18 @@ if check_password():
     with st.expander("Show conversation history"):
         # Display the conversation history
         st.markdown('\n\n'.join(st.session_state.conversation_history))
+        
+    speech_file_path = "current_response.mp3"    
+    if st.session_state.current_response != "":
+        audio_response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=st.session_state.current_response,
+        )
+
+        st.session_state.current_audio_file = audio_response.stream_to_file(speech_file_path)
+    # if st.session_state.current_audio_file != "":
+    st.sidebar.write("Here is the most recent audio response:")
+    st.sidebar.audio(st.session_state.current_audio_file)
+
+
