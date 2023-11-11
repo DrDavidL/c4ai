@@ -9,7 +9,7 @@
 import openai
 import streamlit as st
 from openai import OpenAI
-import os
+import base64
 import time
 
 # Define a function to check if the password entered by the user is correct
@@ -54,6 +54,21 @@ def summarize(text):
     )
     # Return the content of the model's response
     return response['choices'][0]['message']['content']
+
+def autoplay_local_audio(filepath: str):
+    # Read the audio file from the local file system
+    with open(filepath, 'rb') as f:
+        data = f.read()
+    b64 = base64.b64encode(data).decode()
+    md = f"""
+        <audio controls autoplay="true">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        </audio>
+        """
+    st.markdown(
+        md,
+        unsafe_allow_html=True,
+    )
 
 # If the conversation history is not yet in the session state, initialize it
 if 'conversation_history' not in st.session_state:
@@ -226,10 +241,11 @@ if check_password():
             voice="alloy",
             input=st.session_state.current_response,
         )
-
-        st.session_state.current_audio_file = audio_response.stream_to_file(speech_file_path)
-    # if st.session_state.current_audio_file != "":
-    st.sidebar.write("Here is the most recent audio response:")
-    st.sidebar.audio(st.session_state.current_audio_file)
+        audio_response.stream_to_file(speech_file_path)
+        autoplay_local_audio(speech_file_path)
+ 
+    # # if st.session_state.current_audio_file != "":
+    # st.sidebar.write("Here is the most recent audio response:")
+    # st.sidebar.audio(st.session_state.current_audio_file)
 
 
