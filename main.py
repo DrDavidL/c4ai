@@ -55,13 +55,21 @@ def summarize(text):
     # Return the content of the model's response
     return response['choices'][0]['message']['content']
 
+@st.cache_data
+def talk(model, voice, input):
+        return client.audio.speech.create(
+                    model= model,
+                    voice = voice,
+                    input = input,
+                )
+
 def autoplay_local_audio(filepath: str):
     # Read the audio file from the local file system
     with open(filepath, 'rb') as f:
         data = f.read()
     b64 = base64.b64encode(data).decode()
     md = f"""
-        <audio controls autoplay="true">
+        <audio controls autoplay="false">
         <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
         </audio>
         """
@@ -175,13 +183,14 @@ if check_password():
             counter = 0
 
             # While the run is not completed and the counter is less than 10
-            while run.status != "completed" and counter < 10:
-                # Wait for 5 seconds
-                time.sleep(5)
-                # Retrieve the run again
-                run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
-                # Increment the counter
-                counter += 1
+            with st.spinner("Waiting for the assistant to respond..."):
+                while run.status != "completed" and counter < 10:
+                    # Wait for 5 seconds
+                    time.sleep(5)
+                    # Retrieve the run again
+                    run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+                    # Increment the counter
+                    counter += 1
                 
             # If the counter reached 10
             if counter == 10:
@@ -232,20 +241,20 @@ if check_password():
     # Create an expander for the conversation history
     with st.expander("Show conversation history"):
         # Display the conversation history
-        st.markdown('\n\n'.join(st.session_state.conversation_history))
-        
-    speech_file_path = "current_response.mp3"    
-    if st.session_state.current_response != "":
-        audio_response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=st.session_state.current_response,
-        )
-        audio_response.stream_to_file(speech_file_path)
-        autoplay_local_audio(speech_file_path)
- 
-    # # if st.session_state.current_audio_file != "":
-    # st.sidebar.write("Here is the most recent audio response:")
-    # st.sidebar.audio(st.session_state.current_audio_file)
+        convo_history = '\n\n'.join(st.session_state.conversation_history)
+        st.markdown(convo_history)
+        st.download_button('Download the conversation', convo_history, 'conversation.txt', 'text/plain')
+    
+    listen_to_answer = st.checkbox("Generate an audio version of the most recent response")
+    if listen_to_answer:
+        speech_file_path = "current_response.mp3"    
+        if len(st.session_state.current_response) > 5:
+            with st.spinner("Generating audio..."):
+                audio_response = talk("tts-1", "alloy", st.session_state.current_response)
+                audio_response.stream_to_file(speech_file_path)
+            autoplay_local_audio(speech_file_path)
+        else:
+            st.write("Please ask a question first!")
+    
 
 
